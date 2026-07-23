@@ -33,6 +33,7 @@ brew install cmake
 sudo xcode-select -s /Applications/Xcode.app/Contents/Developer   # full Xcode required
 
 python3 Platform/iOS/tools/extract_assets.py    # fetch game data -> game_resources/
+Platform/iOS/tools/make_icon.sh <image>         # optional: app icon
 Platform/iOS/build-ios.sh simulator Debug       # or: device Release
 ```
 
