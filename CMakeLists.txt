@@ -60,6 +60,8 @@ endforeach()
 set(SOURCE_FILES
         SpaceCadetPinball/Background.cpp
         SpaceCadetPinball/Background.h
+        SpaceCadetPinball/MotionNudge.cpp
+        SpaceCadetPinball/MotionNudge.h
         SpaceCadetPinball/control.cpp
         SpaceCadetPinball/control.h
         SpaceCadetPinball/EmbeddedData.cpp

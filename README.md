@@ -161,6 +161,7 @@ Both cost real debugging time; don't reintroduce them:
 | `profile[]` | `render.cpp` | Side wedge width + dissolve per depth |
 | `glows[]`, `planets[]` | `Background.cpp` | Backdrop nebulae and planets |
 | `PlungerFraction` | `TouchControls.cpp` | Plunger vs flipper split |
+| `TriggerAccel`, `CooldownMs` | `MotionNudge.cpp` | Nudge sensitivity and repeat rate |
 
 ### Debugging
 
@@ -177,8 +178,11 @@ xcrun simctl get_app_container booted com.example.spacecadetpinball data # setti
 
 ## Known gaps
 
-- **Nudge / tilt is not wired up.** The engine supports it
-  (`Left/Right/BottomTableBump`) but no touch gesture triggers it.
+- **Tilt nudge is untested on hardware.** Shoving the phone nudges the table via
+  the accelerometer (`MotionNudge.cpp`), but the iOS Simulator has no
+  accelerometer, so only the graceful-degradation path has been verified. The
+  trigger threshold and axis directions may need tuning on a real device - see
+  `TriggerAccel` and the axis mapping. There is no touch-gesture fallback yet.
 - **No high-score viewer** — the table only appears at game over.
 - **Player count is fixed at 1**; the engine supports 1–4.
 - **MIDI music is silent** — SDL2_mixer builds with Timidity but no instrument set.

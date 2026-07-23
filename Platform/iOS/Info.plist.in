@@ -39,5 +39,7 @@
 	<false/>
 	<key>UIRequiresFullScreen</key>
 	<true/>
+	<key>NSMotionUsageDescription</key>
+	<string>Motion is used to nudge the pinball table when you shove the phone.</string>
 </dict>
 </plist>

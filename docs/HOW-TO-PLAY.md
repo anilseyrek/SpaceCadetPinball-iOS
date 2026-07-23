@@ -40,6 +40,17 @@ Touch and **hold** in the upper table area, then release. Longer hold = harder
 launch. A quick flick barely moves the ball, so hold for about a second for a full
 launch.
 
+### Nudging (tilt)
+
+**Give the phone a sharp shove** to nudge the table and steer a ball away from the
+drain — sideways to nudge left or right, or away from you to bump from the bottom.
+
+Nudge too often and the game **TILTs**, exactly as the original does: you lose
+control of the ball. Use it sparingly.
+
+Turn it off from the menu (**Tilt Nudge**) if you find it fires accidentally. The
+option only appears on devices that have an accelerometer.
+
 ## Menu
 
 Tap the **logo tile** (top left of the scoreboard) to open it.
@@ -70,7 +81,6 @@ Scores are saved immediately and survive quitting the app.
 ## Notes
 
 - **Portrait only.**
-- **Nudging is not available yet** — you cannot bump the table to save a ball.
 - **Music is silent** — sound effects work; the MIDI soundtrack has no instrument
   set bundled.
 - The app fully saves its state when you background it, so switching apps mid-game

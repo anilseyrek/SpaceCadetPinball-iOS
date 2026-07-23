@@ -12,6 +12,7 @@
 #include "translations.h"
 #include "font_selection.h"
 #include "TouchControls.h"
+#include "MotionNudge.h"
 #include "Background.h"
 
 constexpr const char* winmain::Version;
@@ -80,6 +81,13 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 		pb::ShowMessageBox(SDL_MESSAGEBOX_ERROR, "Could not initialize SDL2", SDL_GetError());
 		return 1;
 	}
+
+	// Sensors are optional: initialise separately so a platform without them
+	// cannot fail the whole startup.
+	if (SDL_InitSubSystem(SDL_INIT_SENSOR) == 0)
+		MotionNudge::Init();
+	else
+		SDL_ClearError();
 
 	pb::quickFlag = strstr(lpCmdLine, "-quick") != nullptr;
 
@@ -305,6 +313,7 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 	}
 
 	Background::Destroy();
+	MotionNudge::Shutdown();
 	SDL_free(basePath);
 	SDL_free(prefPath);
 	SDL_DestroyRenderer(renderer);
@@ -376,6 +385,7 @@ void winmain::MainLoop()
 			if (!single_step && !no_time_loss)
 			{
 				auto dt = static_cast<float>(frameDuration.count());
+				MotionNudge::Update(dt);
 				pb::frame(dt);
 				if (DispGRhistory)
 				{
@@ -1481,6 +1491,11 @@ void winmain::RenderMobileMenu()
 			options::toggle(Menu1::Music);
 		if (ImGui::Button(TouchControls::ShowOverlay ? "Hide Control Hints" : "Show Control Hints", btn))
 			TouchControls::ShowOverlay ^= true;
+		if (MotionNudge::Available())
+		{
+			if (ImGui::Button(MotionNudge::Enabled ? "Tilt Nudge: On" : "Tilt Nudge: Off", btn))
+				MotionNudge::Enabled ^= true;
+		}
 		ImGui::EndPopup();
 	}
 }
