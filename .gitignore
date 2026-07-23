@@ -300,3 +300,19 @@ _deps
 build.ninja
 # Build directory
 /build
+
+# ---- iOS port ----------------------------------------------------------
+# The original game's data is Microsoft's and is never committed.
+# Fetch it locally with: python3 Platform/iOS/tools/extract_assets.py
+game_resources/
+
+# App icon is generated from the game's own artwork - also not committed.
+# Create it with: Platform/iOS/tools/make_icon.sh <image>
+Platform/iOS/Assets.xcassets/AppIcon.appiconset/icon_1024.png
+
+# Build output
+build-ios-simulator/
+build-ios-device/
+build-macos/
+bin/
+*.log

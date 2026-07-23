@@ -109,6 +109,8 @@ private:
 	static int CursorIdleCounter;
 
 	static void RenderUi();
+	static void RenderMobileMenu();
+	static bool OpenMobileMenuRequested;
 	static void RenderFrameTimeDialog();
 	static void HybridSleep(DurationMs seconds);
 	static void MainLoop();

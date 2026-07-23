@@ -33,7 +33,21 @@
 #include <initializer_list>
 //#include <array>
 
+// Platform detection: iOS (device or simulator) needs SDL's own main / UIKit
+// entry point, so it must NOT set SDL_MAIN_HANDLED.
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+#if defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+#define SCP_PLATFORM_IOS 1
+#else
+#define SCP_PLATFORM_IOS 0
+#endif
+
+#if !SCP_PLATFORM_IOS
+// Desktop: the game supplies its own main(); tell SDL not to hijack it.
 #define SDL_MAIN_HANDLED
+#endif
 #include "SDL.h"
 #include <SDL_mixer.h>
 

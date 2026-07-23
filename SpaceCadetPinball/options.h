@@ -109,6 +109,10 @@ public:
 	static void InitPrimary();
 	static void InitSecondary();
 	static void uninit();
+	// Flush all options (including high scores) to the settings file on disk.
+	// Must be called explicitly on mobile: iOS suspends/kills the app without
+	// ever delivering SDL_QUIT, so the normal shutdown path does not run.
+	static void SaveToDisk();
 	static const std::string& GetSetting(const std::string& key, const std::string& defaultValue);
 	static void SetSetting(const std::string& key, const std::string& value);
 	static int get_int(LPCSTR lpValueName, int defaultValue);

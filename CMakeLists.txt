@@ -3,6 +3,13 @@ project(SpaceCadetPinball)
 
 set(CMAKE_CXX_STANDARD 11)
 
+# iOS is detected via -DCMAKE_SYSTEM_NAME=iOS (see Platform/iOS/build-ios.sh).
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(SCP_IOS ON)
+    # FetchContent for SDL2/SDL2_mixer needs a modern CMake.
+    cmake_minimum_required(VERSION 3.14)
+endif()
+
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/bin)
 
@@ -19,12 +26,14 @@ if(MINGW)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static")
 endif()
 
-if(APPLE)
+if(APPLE AND NOT SCP_IOS)
     set(MACOSX_RPATH)
     set(CMAKE_BUILD_WITH_INSTALL_RPATH true)
     set(CMAKE_INSTALL_RPATH "@executable_path/../Frameworks")
     set(CMAKE_OSX_DEPLOYMENT_TARGET "10.11")
-    set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64")
+    if(NOT DEFINED CMAKE_OSX_ARCHITECTURES)
+        set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64")
+    endif()
     list(APPEND SDL2_PATH "${CMAKE_CURRENT_LIST_DIR}/Libs")
     list(APPEND SDL2_MIXER_PATH "${CMAKE_CURRENT_LIST_DIR}/Libs")
 endif()
@@ -32,10 +41,15 @@ endif()
 # SDL2main is not needed
 set(SDL2_BUILDING_LIBRARY ON)
 
-find_package(SDL2 REQUIRED)
-FIND_PACKAGE(SDL2_mixer REQUIRED)
-
-include_directories(${SDL2_INCLUDE_DIR} ${SDL2_MIXER_INCLUDE_DIR})
+if(SCP_IOS)
+    # Builds SDL2 + SDL2_mixer from source for iOS and sets SDL2_LIBRARY /
+    # SDL2_MIXER_LIBRARY to the resulting targets.
+    include(iOS)
+else()
+    find_package(SDL2 REQUIRED)
+    FIND_PACKAGE(SDL2_mixer REQUIRED)
+    include_directories(${SDL2_INCLUDE_DIR} ${SDL2_MIXER_INCLUDE_DIR})
+endif()
 get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
 foreach(dir ${dirs})
   message(STATUS "Include dir='${dir}'")
@@ -44,6 +58,8 @@ endforeach()
 
 
 set(SOURCE_FILES
+        SpaceCadetPinball/Background.cpp
+        SpaceCadetPinball/Background.h
         SpaceCadetPinball/control.cpp
         SpaceCadetPinball/control.h
         SpaceCadetPinball/EmbeddedData.cpp
@@ -143,6 +159,8 @@ set(SOURCE_FILES
         SpaceCadetPinball/TRamp.h
         SpaceCadetPinball/translations.cpp
         SpaceCadetPinball/translations.h
+        SpaceCadetPinball/TouchControls.cpp
+        SpaceCadetPinball/TouchControls.h
         SpaceCadetPinball/TRollover.cpp
         SpaceCadetPinball/TRollover.h
         SpaceCadetPinball/TSink.cpp
@@ -217,6 +235,11 @@ if(${CMAKE_VERSION} VERSION_GREATER "3.16.0" OR ${CMAKE_VERSION} VERSION_EQUAL "
 endif()
 
 target_link_libraries(SpaceCadetPinball ${SDL2_LIBRARY} ${SDL2_MIXER_LIBRARY})
+
+if(SCP_IOS)
+    # Turn the target into an iOS .app and embed game_resources/ + launch screen.
+    scp_configure_ios_bundle(SpaceCadetPinball)
+endif()
 
 # On Windows, copy DLL to output
 if(WIN32)

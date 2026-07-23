@@ -11,6 +11,8 @@
 #include "Sound.h"
 #include "translations.h"
 #include "font_selection.h"
+#include "TouchControls.h"
+#include "Background.h"
 
 constexpr const char* winmain::Version;
 
@@ -51,6 +53,7 @@ optionsStruct& winmain::Options = options::Options;
 winmain::DurationMs winmain::SpinThreshold = DurationMs(0.005);
 WelfordState winmain::SleepState{};
 int winmain::CursorIdleCounter = 0;
+bool winmain::OpenMobileMenuRequested = false;
 
 int winmain::WinMain(LPCSTR lpCmdLine)
 {
@@ -63,7 +66,14 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 	printf(" ImGui %s %s\n", IMGUI_VERSION, ImGuiRender);
 
 	// SDL init
+#if !SCP_PLATFORM_IOS
+	// On iOS, SDL provides main() and marks itself ready; calling this there is wrong.
 	SDL_SetMainReady();
+#else
+	// Drive ImGui's mouse from finger events ourselves (see event_handler), so
+	// disable SDL's touch->mouse synthesis to avoid double input.
+	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+#endif
 	if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_AUDIO | SDL_INIT_VIDEO |
 		SDL_INIT_EVENTS | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) < 0)
 	{
@@ -240,6 +250,13 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 			return 1;
 		}
 
+#if SCP_PLATFORM_IOS
+		// Mobile: portrait relayout (score panel split above a full-width table)
+		// and hide the desktop menu bar (a touch "Menu" button replaces it).
+		fullscrn::MobileLayout = true;
+		Options.ShowMenu = false;
+#endif
+
 		fullscrn::init();
 
 		pb::reset_table();
@@ -249,6 +266,10 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 		{
 			Options.FullScreen = true;
 		}
+#if SCP_PLATFORM_IOS
+		// On a phone/tablet there is no desktop window; always fill the screen.
+		Options.FullScreen = true;
+#endif
 
 		if (!Options.FullScreen)
 		{
@@ -283,6 +304,7 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 		Mix_Quit();
 	}
 
+	Background::Destroy();
 	SDL_free(basePath);
 	SDL_free(prefPath);
 	SDL_DestroyRenderer(renderer);
@@ -379,10 +401,34 @@ void winmain::MainLoop()
 				ImGui::NewFrame();
 				RenderUi();
 
+#if SCP_PLATFORM_IOS
+				// Raise/dismiss the on-screen keyboard to match ImGui's text
+				// input state (e.g. the high score name field). Without this
+				// there is no way to type on a phone.
+				//
+				// Track the requested state ourselves rather than asking
+				// SDL_IsTextInputActive(): SDL can already consider text input
+				// active at startup, which would suppress the SDL_StartTextInput
+				// call that actually presents the iOS keyboard.
+				{
+					static bool keyboardRequested = false;
+					if (ImIO->WantTextInput != keyboardRequested)
+					{
+						keyboardRequested = ImIO->WantTextInput;
+						if (keyboardRequested)
+							SDL_StartTextInput();
+						else
+							SDL_StopTextInput();
+					}
+				}
+#endif
+
 				SDL_RenderClear(Renderer);
 				// Alternative clear hack, clear might fail on some systems
 				// Todo: remove original clear, if save for all platforms
 				SDL_RenderFillRect(Renderer, nullptr);
+				// Deep-space backdrop fills the area around the table/score panel.
+				Background::Render();
 				render::PresentVScreen();
 
 				ImGui::Render();
@@ -458,6 +504,10 @@ void winmain::RenderUi()
 	ImGui::PushStyleColor(ImGuiCol_MenuBarBg, ImVec4{});
 	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{});
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
+#if SCP_PLATFORM_IOS
+	// Mobile: a touch-friendly menu button + popup instead of the desktop bar.
+	RenderMobileMenu();
+#else
 	if (!Options.ShowMenu && ImGui::BeginMainMenuBar())
 	{
 		if (ImGui::MenuItem("Menu"))
@@ -467,6 +517,7 @@ void winmain::RenderUi()
 		}
 		ImGui::EndMainMenuBar();
 	}
+#endif
 	ImGui::PopStyleVar(1);
 	ImGui::PopStyleColor(2);
 
@@ -833,6 +884,9 @@ void winmain::RenderUi()
 
 	// Print game texts on the sidebar
 	gdrv::grtext_draw_ttext_in_box();
+
+	// Optional translucent on-screen touch zone hints (mobile).
+	TouchControls::RenderOverlay();
 }
 
 int winmain::event_handler(const SDL_Event* event)
@@ -896,6 +950,13 @@ int winmain::event_handler(const SDL_Event* event)
 		fullscrn::shutdown();
 		return_value = 0;
 		return 0;
+	case SDL_APP_WILLENTERBACKGROUND:
+	case SDL_APP_TERMINATING:
+		// iOS can suspend or kill the app without ever sending SDL_QUIT, so the
+		// normal shutdown path never runs. Flush settings/high scores here.
+		TouchControls::ReleaseAll();
+		options::SaveToDisk();
+		break;
 	case SDL_KEYUP:
 		pb::InputUp({InputTypes::Keyboard, event->key.keysym.sym});
 		break;
@@ -1013,6 +1074,8 @@ int winmain::event_handler(const SDL_Event* event)
 			midi::music_stop();
 			has_focus = false;
 			pb::loose_focus();
+			// Don't leave a flipper stuck down when the app loses focus / backgrounds.
+			TouchControls::ReleaseAll();
 			break;
 		case SDL_WINDOWEVENT_SIZE_CHANGED:
 		case SDL_WINDOWEVENT_RESIZED:
@@ -1041,6 +1104,44 @@ int winmain::event_handler(const SDL_Event* event)
 		break;
 	case SDL_CONTROLLERBUTTONUP:
 		pb::InputUp({InputTypes::GameController, event->cbutton.button});
+		break;
+	case SDL_FINGERDOWN:
+	case SDL_FINGERMOTION:
+	case SDL_FINGERUP:
+		{
+			// Feed the finger to ImGui as a mouse so on-screen UI (the mobile
+			// menu) is tappable. Finger coords are normalized to window size.
+			int ww, wh;
+			SDL_GetWindowSize(MainWindow, &ww, &wh);
+			ImIO->AddMousePosEvent(event->tfinger.x * ww, event->tfinger.y * wh);
+			if (event->type == SDL_FINGERDOWN)
+				ImIO->AddMouseButtonEvent(0, true);
+			else if (event->type == SDL_FINGERUP)
+				ImIO->AddMouseButtonEvent(0, false);
+
+			// If ImGui is using this touch (finger over the open menu), don't also
+			// drive the flippers/plunger with it.
+			if (ImIO->WantCaptureMouse)
+			{
+				TouchControls::ReleaseAll();
+				break;
+			}
+
+			// Tapping the logo tile (top-left score tile) opens the mobile menu.
+			if (event->type == SDL_FINGERDOWN && fullscrn::MobileLayout && fullscrn::MobileScreenW > 0)
+			{
+				const SDL_Rect& r = fullscrn::SideTopDstRect;
+				float px = event->tfinger.x * fullscrn::MobileScreenW;
+				float py = event->tfinger.y * fullscrn::MobileScreenH;
+				if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h)
+				{
+					OpenMobileMenuRequested = true;
+					break;
+				}
+			}
+
+			TouchControls::HandleFingerEvent(event);
+		}
 		break;
 	default: ;
 	}
@@ -1339,6 +1440,48 @@ void winmain::HandleGameBinding(GameBindings binding, bool shortcut)
 		break;
 	default:
 		break;
+	}
+}
+
+void winmain::RenderMobileMenu()
+{
+	// The menu is opened by tapping the logo tile (handled in event_handler).
+	if (OpenMobileMenuRequested)
+	{
+		OpenMobileMenuRequested = false;
+		ImGui::OpenPopup("MobileMenuPopup");
+	}
+
+	auto* vp = ImGui::GetMainViewport();
+	// Centred on screen.
+	ImGui::SetNextWindowPos(vp->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+	if (ImGui::BeginPopup("MobileMenuPopup"))
+	{
+		ImGui::SetWindowFontScale(1.6f);
+		const ImVec2 btn{360, 50};
+		if (ImGui::Button("New Game", btn))
+		{
+			new_game();
+			ImGui::CloseCurrentPopup();
+		}
+		if (ImGui::Button("Launch Ball", btn))
+		{
+			end_pause();
+			pb::launch_ball();
+			ImGui::CloseCurrentPopup();
+		}
+		if (ImGui::Button("Pause / Resume", btn))
+		{
+			pause();
+			ImGui::CloseCurrentPopup();
+		}
+		if (ImGui::Button(Options.Sounds ? "Sound: On" : "Sound: Off", btn))
+			options::toggle(Menu1::Sounds);
+		if (ImGui::Button(Options.Music ? "Music: On" : "Music: Off", btn))
+			options::toggle(Menu1::Music);
+		if (ImGui::Button(TouchControls::ShowOverlay ? "Hide Control Hints" : "Show Control Hints", btn))
+			TouchControls::ShowOverlay ^= true;
+		ImGui::EndPopup();
 	}
 }
 

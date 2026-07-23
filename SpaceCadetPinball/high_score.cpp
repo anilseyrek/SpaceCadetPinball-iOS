@@ -67,6 +67,10 @@ int high_score::write()
 	}
 
 	options::set_int("Verification", checkSum);
+
+	// Persist immediately: on mobile the app can be killed without a clean
+	// shutdown, which would otherwise lose the score that was just set.
+	options::SaveToDisk();
 	return 0;
 }
 
@@ -199,6 +203,10 @@ void high_score::RenderHighScoreDialog()
 			if (dlg_enter_name)
 			{
 				place_new_score_into(DlgData);
+				// Commit right away. Previously the table was only written by
+				// pb::uninit() on a clean shutdown, which never happens on iOS,
+				// so entered scores were lost.
+				write();
 			}
 			ImGui::CloseCurrentPopup();
 		}
@@ -216,6 +224,7 @@ void high_score::RenderHighScoreDialog()
 			if (ImGui::Button(pb::get_rc_string(Msg::GenericOk), ImVec2(120, 0)))
 			{
 				clear_table();
+				write();
 				ImGui::CloseCurrentPopup();
 			}
 			ImGui::SetItemDefaultFocus();

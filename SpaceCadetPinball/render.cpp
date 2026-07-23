@@ -8,6 +8,7 @@
 #include "score.h"
 #include "TPinballTable.h"
 #include "winmain.h"
+#include "Background.h"
 #include "DebugOverlay.h"
 #include "proj.h"
 
@@ -455,6 +456,102 @@ void render::SpriteViewer(bool* show)
 void render::PresentVScreen()
 {
 	vscreen->BlitToTexture();
+
+	if (fullscrn::MobileLayout)
+	{
+		// Portrait relayout: table below, score panel split into two tiles on top.
+		// The panel sources are cropped to their grey frames (no black padding).
+		SDL_Rect srcBoard{0, 0, fullscrn::SidebarSepX, vscreen->Height};
+		const SDL_Rect& srcSideTop = fullscrn::SideTopSrcRect;
+		const SDL_Rect& srcSideBot = fullscrn::SideBotSrcRect;
+
+		// Apply nudge offset to the table only.
+		SDL_Rect boardDst = fullscrn::BoardDstRect;
+		if (offset_x != 0 || offset_y != 0)
+		{
+			boardDst.x += static_cast<int>(round(offset_x * fullscrn::ScaleX));
+			boardDst.y += static_cast<int>(round(offset_y * fullscrn::ScaleY));
+		}
+
+		SDL_RenderCopy(winmain::Renderer, vscreen->Texture, &srcBoard, &boardDst);
+
+		// Same for the left/right edges: bleed the outermost columns sideways and
+		// dissolve them, so the table doesn't read as a rectangle cut out and
+		// pasted over the backdrop.
+		int boardRight = boardDst.x + boardDst.w;
+		if (boardDst.x > 0)
+		{
+			SDL_Rect srcEdge{0, 0, 3, vscreen->Height};
+			SDL_Rect dstEdge{0, boardDst.y, boardDst.x, boardDst.h};
+			SDL_RenderCopy(winmain::Renderer, vscreen->Texture, &srcEdge, &dstEdge);
+			// Full backdrop at the screen edge, none where the table starts.
+			Background::RenderFadeBandX(dstEdge, 1.0f, 0.0f);
+		}
+		if (boardRight < fullscrn::MobileScreenW)
+		{
+			SDL_Rect srcEdge{fullscrn::SidebarSepX - 3, 0, 3, vscreen->Height};
+			SDL_Rect dstEdge{
+				boardRight, boardDst.y, fullscrn::MobileScreenW - boardRight, boardDst.h
+			};
+			SDL_RenderCopy(winmain::Renderer, vscreen->Texture, &srcEdge, &dstEdge);
+			Background::RenderFadeBandX(dstEdge, 0.0f, 1.0f);
+		}
+
+		// Dissolve only the black margins beside the cabinet, never the cabinet
+		// itself - so the table's top edge stays perfectly crisp. The inner edge
+		// of each wedge tracks the cabinet's perspective taper (measured from the
+		// art), and the dissolve strength falls off with depth: full at the top,
+		// none by the bottom. Everything is a fraction of the board rect, so it
+		// scales to any device.
+		{
+			struct WedgeStop
+			{
+				float Y;     // fraction down the board
+				float Width; // black margin width, fraction of board width
+				float Alpha; // dissolve strength
+			};
+			static const WedgeStop profile[] =
+			{
+				{0.00f, 0.200f, 1.00f}, // hard dissolve beside the top edge
+				{0.30f, 0.145f, 0.62f},
+				{0.60f, 0.095f, 0.30f},
+				{1.00f, 0.088f, 0.00f}, // no dissolve at the bottom
+			};
+
+			float bx = static_cast<float>(boardDst.x);
+			float bw = static_cast<float>(boardDst.w);
+			float rx = bx + bw;
+			for (size_t i = 0; i + 1 < sizeof profile / sizeof profile[0]; i++)
+			{
+				const WedgeStop& a = profile[i];
+				const WedgeStop& b = profile[i + 1];
+				float y0 = boardDst.y + boardDst.h * a.Y;
+				float y1 = boardDst.y + boardDst.h * b.Y;
+				Background::RenderFadeWedge(bx, bx + bw * a.Width, y0,
+				                            bx, bx + bw * b.Width, y1, a.Alpha, b.Alpha);
+				Background::RenderFadeWedge(rx, rx - bw * a.Width, y0,
+				                            rx, rx - bw * b.Width, y1, a.Alpha, b.Alpha);
+			}
+		}
+
+		// The table art ends on a hard horizontal cut. Bleed its bottom rows
+		// down into the empty space below, then dissolve that into the backdrop
+		// so the playfield fades out instead of stopping abruptly.
+		int boardBottom = boardDst.y + boardDst.h;
+		if (boardBottom < fullscrn::MobileScreenH)
+		{
+			SDL_Rect srcEdge{0, vscreen->Height - 3, fullscrn::SidebarSepX, 3};
+			SDL_Rect dstEdge{
+				boardDst.x, boardBottom, boardDst.w, fullscrn::MobileScreenH - boardBottom
+			};
+			SDL_RenderCopy(winmain::Renderer, vscreen->Texture, &srcEdge, &dstEdge);
+			Background::RenderFadeBand(boardBottom, fullscrn::MobileScreenH);
+		}
+
+		SDL_RenderCopy(winmain::Renderer, vscreen->Texture, &srcSideTop, &fullscrn::SideTopDstRect);
+		SDL_RenderCopy(winmain::Renderer, vscreen->Texture, &srcSideBot, &fullscrn::SideBotDstRect);
+		return;
+	}
 
 	if (offset_x == 0 && offset_y == 0)
 	{

@@ -187,10 +187,24 @@ void options::InitSecondary()
 
 void options::uninit()
 {
+	SaveToDisk();
+}
+
+void options::SaveToDisk()
+{
 	Options.Language.V = translations::GetCurrentLanguage()->ShortName;
 	for (const auto opt : AllOptions)
 	{
 		opt->Save();
+	}
+
+	// opt->Save() only updates the in-memory settings map; the map is written
+	// out by our ImGui settings handler, so force the .ini to disk now.
+	auto& io = ImGui::GetIO();
+	if (io.IniFilename)
+	{
+		ImGui::SaveIniSettingsToDisk(io.IniFilename);
+		io.WantSaveIniSettings = false;
 	}
 }
 
