@@ -465,12 +465,15 @@ void render::PresentVScreen()
 		const SDL_Rect& srcSideTop = fullscrn::SideTopSrcRect;
 		const SDL_Rect& srcSideBot = fullscrn::SideBotSrcRect;
 
-		// Apply nudge offset to the table only.
+		// Apply nudge offset to the table only. The engine shifts by ~2 vscreen
+		// pixels, which is imperceptible on a phone, so amplify it purely as
+		// visual feedback - ball physics is unaffected.
+		constexpr float NudgeShakeGain = 3.5f;
 		SDL_Rect boardDst = fullscrn::BoardDstRect;
 		if (offset_x != 0 || offset_y != 0)
 		{
-			boardDst.x += static_cast<int>(round(offset_x * fullscrn::ScaleX));
-			boardDst.y += static_cast<int>(round(offset_y * fullscrn::ScaleY));
+			boardDst.x += static_cast<int>(round(offset_x * fullscrn::ScaleX * NudgeShakeGain));
+			boardDst.y += static_cast<int>(round(offset_y * fullscrn::ScaleY * NudgeShakeGain));
 		}
 
 		SDL_RenderCopy(winmain::Renderer, vscreen->Texture, &srcBoard, &boardDst);

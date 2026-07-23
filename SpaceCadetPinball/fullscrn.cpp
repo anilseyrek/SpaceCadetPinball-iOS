@@ -227,6 +227,12 @@ static void ComputeMobileLayout(int width, int height)
 		(width - boardW) / 2, blackTop + (blackH - boardH) / 2, boardW, boardH
 	};
 
+	// Publish the board scale. render::shift() (the nudge shake) is expressed in
+	// vscreen units and scaled by these; the mobile path returns before the
+	// desktop assignment, so without this they stay at 1 and the shake is wrong.
+	fullscrn::ScaleX = static_cast<float>(boardW) / tableW;
+	fullscrn::ScaleY = static_cast<float>(boardH) / vH;
+
 	// The board is the primary content; keep DestinationRect aligned to it so
 	// board-region pinball coordinates map correctly.
 	render::DestinationRect = fullscrn::BoardDstRect;

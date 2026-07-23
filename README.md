@@ -178,11 +178,8 @@ xcrun simctl get_app_container booted com.example.spacecadetpinball data # setti
 
 ## Known gaps
 
-- **Tilt nudge is untested on hardware.** Shoving the phone nudges the table via
-  the accelerometer (`MotionNudge.cpp`), but the iOS Simulator has no
-  accelerometer, so only the graceful-degradation path has been verified. The
-  trigger threshold and axis directions may need tuning on a real device - see
-  `TriggerAccel` and the axis mapping. There is no touch-gesture fallback yet.
+- **No touch-gesture fallback for nudging.** Tilt nudge needs an accelerometer,
+  so there is no way to nudge on a device without one (or in the Simulator).
 - **No high-score viewer** — the table only appears at game over.
 - **Player count is fixed at 1**; the engine supports 1–4.
 - **MIDI music is silent** — SDL2_mixer builds with Timidity but no instrument set.
